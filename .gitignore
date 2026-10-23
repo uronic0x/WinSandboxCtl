@@ -1,0 +1,9 @@
+/bin/
+/build/
+/build-cmake/
+/.test-build/
+/Boxes/
+__pycache__/
+*.obj
+*.pdb
+*.ilk
