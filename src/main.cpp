@@ -234,6 +234,7 @@ OPTIONS:
   --identity admin|system         Default admin; system is non-interactive
   --appdata Vendor\App            Persist this roaming subfolder (write data)
   --localappdata Vendor\App       Persist this local subfolder (write data)
+  --home .appdir                  Persist this user-profile subfolder (write data)
   --memory MB                    2048..32768, default 4096
   --protected-client on|off       Default on; never silently downgraded
   --root PATH                    Box storage, default LOCALAPPDATA\WinSandboxCtl\Boxes

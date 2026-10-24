@@ -182,7 +182,7 @@ inline bool contains(const fs::path& parent, const fs::path& child) {
 }
 struct Options {
     std::wstring command = L"help", box = L"Demo", app, network = L"off", data = L"write";
-    std::wstring identity = L"admin", proxy, roaming, local, root, input;
+    std::wstring identity = L"admin", proxy, roaming, local, root, input, home;
     std::vector<std::wstring> target_args;
     std::uint32_t memory = 4096;
     bool protected_client = true;
@@ -228,6 +228,7 @@ inline Options parse(const std::vector<std::wstring>& argv) {
         else if (key == L"--proxy") o.proxy = value;
         else if (key == L"--appdata") o.roaming = relative(value);
         else if (key == L"--localappdata") o.local = relative(value);
+        else if (key == L"--home") o.home = relative(value);
         else if (key == L"--memory") o.memory = integer(value, 2048, 32768);
         else if (key == L"--protected-client") {
             require(value == L"on" || value == L"off", "Protected client expects on/off.");
@@ -240,7 +241,7 @@ inline Options parse(const std::vector<std::wstring>& argv) {
     require(o.identity == L"admin" || o.identity == L"system", "Identity expects admin/system.");
     if (o.network == L"proxy") { proxy_address(o.proxy); }
     else require(o.proxy.empty(), "--proxy is only valid with --network proxy.");
-    if (!o.roaming.empty() || !o.local.empty()) require(o.data == L"write", "AppData persistence requires --data write.");
+    if (!o.roaming.empty() || !o.local.empty() || !o.home.empty()) require(o.data == L"write", "AppData persistence requires --data write.");
     if (o.command == L"run" || o.command == L"prepare") {
         require(!o.app.empty(), "--app is required.");
         require(o.app.size() <= 190, "Entry path is too long for the guest work directory.");
@@ -261,6 +262,7 @@ inline std::string manifest(const Options& o, const std::wstring& id, const std:
       << ",\n  \"identity\":" << json(o.identity) << ",\n  \"network\":" << json(o.network)
       << ",\n  \"proxy\":" << json(o.proxy) << ",\n  \"data\":" << json(o.data)
       << ",\n  \"roaming\":" << json(o.roaming) << ",\n  \"local\":" << json(o.local)
+      << ",\n  \"home\":" << json(o.home)
       << ",\n  \"appFromData\":" << (o.app_from_data ? "true" : "false") << "\n}\n";
     return s.str();
 }

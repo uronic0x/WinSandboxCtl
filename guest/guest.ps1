@@ -46,7 +46,10 @@ function Set-PersistentDirectory {
     if ($script:Config.data -ne 'write') { throw 'AppData links require writable data.' }
     if (-not $Base) { throw 'Current identity has no AppData directory.' }
     $source = Join-Path $Base $SubPath
-    $target = Join-Path ('C:\Sandbox\Data\AppData\' + $Category) $SubPath
+    # Category may be a plain folder name (e.g. 'Roaming') or a relative path from
+    # C:\Sandbox\Data (e.g. 'UserHome') - AppData-prefixed when it is not rooted under Data.
+    $targetRoot = if ($Category -eq 'UserHome') { 'C:\Sandbox\Data\' + $Category } else { 'C:\Sandbox\Data\AppData\' + $Category }
+    $target = Join-Path $targetRoot $SubPath
     [IO.Directory]::CreateDirectory($target) | Out-Null
     [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($source)) | Out-Null
     if (Test-Path -LiteralPath $source) {
@@ -226,6 +229,9 @@ try {
     $env:SANDBOX_DATA_DIR = if ($script:Config.data -eq 'none') { '' } else { 'C:\Sandbox\Data' }
     Set-PersistentDirectory ([Environment]::GetFolderPath('ApplicationData')) ([string]$script:Config.roaming) 'Roaming'
     Set-PersistentDirectory ([Environment]::GetFolderPath('LocalApplicationData')) ([string]$script:Config.local) 'Local'
+    if ($script:Config.home) {
+        Set-PersistentDirectory $env:USERPROFILE ([string]$script:Config.home) 'UserHome'
+    }
     Set-GuestProxy
 
     $target = if ($appFromData) { Join-Path 'C:\Sandbox\Data' ([string]$script:Config.entry) } else { Join-Path $work ([string]$script:Config.entry) }
