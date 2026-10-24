@@ -186,6 +186,7 @@ struct Options {
     std::vector<std::wstring> target_args;
     std::uint32_t memory = 4096;
     bool protected_client = true;
+    bool app_from_data = false;
 };
 inline void proxy_address(const std::wstring& s) {
     auto colon = s.find(L':');
@@ -214,6 +215,7 @@ inline Options parse(const std::vector<std::wstring>& argv) {
         if (key == L"--") { o.target_args.assign(argv.begin() + i + 1, argv.end()); break; }
         require(std::find(seen.begin(), seen.end(), key) == seen.end(), "Duplicate option.");
         seen.push_back(key);
+        if (key == L"--app-from-data") { o.app_from_data = true; continue; }
         require(i + 1 < argv.size(), "Option needs a value.");
         auto value = argv[++i];
         if (key == L"--box") o.box = value;
@@ -244,6 +246,7 @@ inline Options parse(const std::vector<std::wstring>& argv) {
         require(o.app.size() <= 190, "Entry path is too long for the guest work directory.");
         auto extension = lower(text(relative_path(o.app).extension()));
         require(extension == L".exe" || extension == L".msi", "Entry must be an EXE or MSI (not a shell script).");
+        require(!o.app_from_data || o.data == L"write", "--app-from-data requires --data write.");
     }
     arguments(o.target_args);
     return o;
@@ -257,7 +260,8 @@ inline std::string manifest(const Options& o, const std::wstring& id, const std:
     s << "],\n  \"argumentsCommandLine\":" << json(arguments(o.target_args))
       << ",\n  \"identity\":" << json(o.identity) << ",\n  \"network\":" << json(o.network)
       << ",\n  \"proxy\":" << json(o.proxy) << ",\n  \"data\":" << json(o.data)
-      << ",\n  \"roaming\":" << json(o.roaming) << ",\n  \"local\":" << json(o.local) << "\n}\n";
+      << ",\n  \"roaming\":" << json(o.roaming) << ",\n  \"local\":" << json(o.local)
+      << ",\n  \"appFromData\":" << (o.app_from_data ? "true" : "false") << "\n}\n";
     return s.str();
 }
 inline std::string wsb(const Options& o, const fs::path& control, const fs::path& input, const fs::path& data) {

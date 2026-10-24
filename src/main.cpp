@@ -138,8 +138,14 @@ fs::path prepare(const Options& o) {
     auto runtime = absolute_local(box / "Runtime");
     require(!contains(input, runtime) && !contains(runtime, input) && !contains(input, data) && !contains(data, input),
             "Input must not overlap Runtime or PersistData.");
-    auto entry = absolute_local(input / relative_path(o.app));
-    require(contains(input, entry) && fs::is_regular_file(entry), "Target entry is not a regular file under input.");
+    if (o.app_from_data) {
+        auto data_entry = absolute_local(data / relative_path(o.app));
+        require(contains(data, data_entry) && fs::is_regular_file(data_entry),
+                "Target entry is not a regular file under the data directory (PersistData).");
+    } else {
+        auto entry = absolute_local(input / relative_path(o.app));
+        require(contains(input, entry) && fs::is_regular_file(entry), "Target entry is not a regular file under input.");
+    }
     const auto script = guest_script();
     const auto script_text = read(script);
     const auto id = run_id();

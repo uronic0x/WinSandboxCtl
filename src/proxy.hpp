@@ -156,6 +156,7 @@ struct ProxyOptions {
     std::vector<std::string> hosts;
     std::set<std::uint16_t> ports{443};
     bool private_upstream = false;
+    bool allow_all = false;
 };
 inline ProxyOptions parse_proxy(const std::vector<std::wstring>& argv) {
     ProxyOptions o;
@@ -164,6 +165,7 @@ inline ProxyOptions parse_proxy(const std::vector<std::wstring>& argv) {
     for (std::size_t i = 0; i < argv.size(); ++i) {
         auto key = argv[i];
         require(key == L"--allow" || seen.insert(key).second, "Duplicate proxy option.");
+        if (key == L"--allow-all") { o.allow_all = true; continue; }
         if (key == L"--allow-private-upstream") { o.private_upstream = true; continue; }
         require(i + 1 < argv.size(), "Proxy option needs a value.");
         auto value = argv[++i];
@@ -188,7 +190,8 @@ inline ProxyOptions parse_proxy(const std::vector<std::wstring>& argv) {
     in_addr address{};
     require(inet_pton(AF_INET, o.listen.c_str(), &address) == 1 && o.listen != "0.0.0.0", "Bind to a specific local IPv4 address.");
     require(o.listen.compare(0, 4, "127.") == 0 || explicit_clients, "Remote proxy binding requires explicit --clients CIDR.");
-    require(!o.hosts.empty(), "Proxy requires at least one --allow domain.");
+    require(o.allow_all || !o.hosts.empty(), "Proxy requires at least one --allow domain (or --allow-all).");
+    require(!(o.allow_all && !o.hosts.empty()), "--allow-all cannot be combined with --allow domains.");
     return o;
 }
 inline Socket upstream(const std::string& host, std::uint16_t port, bool allow_private) {
@@ -311,7 +314,7 @@ inline void serve_client(Socket client, std::shared_ptr<const ProxyOptions> opti
         Request r;
         try { r = connect_request(header); }
         catch (...) { response(client.value, "400 Bad Request"); return; }
-        if (!allowed_host(r.host, options->hosts) || !options->ports.count(r.port)) {
+        if ((!options->allow_all && !allowed_host(r.host, options->hosts)) || !options->ports.count(r.port)) {
             response(client.value, "403 Forbidden"); log("DENY " + r.host + ":" + std::to_string(r.port)); return;
         }
         Socket remote;
@@ -340,7 +343,8 @@ inline int proxy_main(const std::vector<std::wstring>& argv) {
     require(bind(listener.value, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0, "Cannot bind proxy address/port.");
     require(listen(listener.value, 16) == 0, "Cannot listen on proxy socket.");
     log("READY explicit CONNECT proxy " + options->listen + ":" + std::to_string(options->port));
-    log("Policy applies only to connections using this proxy. Ctrl+C stops it. No firewall rules are installed.");
+    log(options->allow_all ? "ALLOW-ALL mode: domain allowlist is bypassed. Private/loopback upstreams and port policy still apply."
+                           : "Policy applies only to connections using this proxy. Ctrl+C stops it. No firewall rules are installed.");
     auto active = std::make_shared<std::atomic<int>>(0);
     for (;;) {
         sockaddr_in peer{};

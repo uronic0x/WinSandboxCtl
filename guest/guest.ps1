@@ -214,8 +214,11 @@ try {
     $work = Join-Path 'C:\Sandbox\Work' $script:Config.runId
     if (Test-Path -LiteralPath $work) { throw 'This guest run already has a work directory; close Sandbox and start a fresh run.' }
     [IO.Directory]::CreateDirectory($work) | Out-Null
-    Get-ChildItem -LiteralPath 'C:\Sandbox\Input' -Force | ForEach-Object {
-        Copy-Item -LiteralPath $_.FullName -Destination $work -Recurse -Force
+    $appFromData = [bool]$script:Config.appFromData
+    if (-not $appFromData) {
+        Get-ChildItem -LiteralPath 'C:\Sandbox\Input' -Force | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination $work -Recurse -Force
+        }
     }
     $env:SANDBOX_RUN_ID = [string]$script:Config.runId
     $env:SANDBOX_INPUT_DIR = 'C:\Sandbox\Input'
@@ -225,7 +228,7 @@ try {
     Set-PersistentDirectory ([Environment]::GetFolderPath('LocalApplicationData')) ([string]$script:Config.local) 'Local'
     Set-GuestProxy
 
-    $target = Join-Path $work ([string]$script:Config.entry)
+    $target = if ($appFromData) { Join-Path 'C:\Sandbox\Data' ([string]$script:Config.entry) } else { Join-Path $work ([string]$script:Config.entry) }
     if (-not (Test-Path -LiteralPath $target -PathType Leaf)) { throw 'Staged entry is missing.' }
     $program = $target
     $argumentLine = [string]$script:Config.argumentsCommandLine
