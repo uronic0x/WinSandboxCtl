@@ -243,7 +243,7 @@ try {
         $argumentLine = '/i "' + $target + '" ' + $argumentLine
     } elseif ($script:Config.network -eq 'proxy') {
         # Chromium/Electron apps: --proxy-server has the highest precedence and
-        # survives apps that rewrite the WinINET registry (e.g. TRAE's icube).
+        # survives apps that rewrite the WinINET registry at startup.
         # --disable-quic keeps HTTP/3 UDP from bypassing the TCP-only CONNECT proxy.
         $proxyArg = '--proxy-server=' + [string]$script:Config.proxy + ' --disable-quic'
         $argumentLine = if ($argumentLine.Length -gt 0) { $proxyArg + ' ' + $argumentLine } else { $proxyArg }
