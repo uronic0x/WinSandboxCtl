@@ -298,7 +298,13 @@ inline std::pair<std::uint64_t, std::uint64_t> relay(socket_type client, socket_
     return {upload, download};
 }
 inline std::mutex& log_mutex() { static std::mutex m; return m; }
-inline void log(const std::string& s) { std::lock_guard<std::mutex> lock(log_mutex()); std::cout << s << std::endl; }
+inline void log(const std::string& s) {
+    std::lock_guard<std::mutex> lock(log_mutex());
+    auto t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    char ts[20];
+    std::strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", std::localtime(&t));
+    std::cout << '[' << ts << "] " << s << std::endl;
+}
 inline void serve_client(Socket client, std::shared_ptr<const ProxyOptions> options, std::shared_ptr<std::atomic<int>> active) {
     struct Counter { std::shared_ptr<std::atomic<int>> n; ~Counter() { --*n; } } counter{active};
     try {
