@@ -1,6 +1,6 @@
 # WinSandboxCtl：Windows Sandbox 用户态控制器
 
-这是你选定的**方案 A——Windows Sandbox 虚拟化路线**的可修改源码实现。没有自制驱动，不需要 WDK，也不需要签名 `.sys`。宿主机控制器使用原生 C++，盒内启动代理使用系统内置 Windows PowerShell。项目自身代码采用 MIT 许可证；Windows 和 Windows Sandbox 是微软提供的运行平台，不包含在本项目开源代码中。
+用户态的 Windows Sandbox 控制器：没有自制驱动，不需要 WDK，也不需要签名 `.sys`。宿主机控制器使用原生 C++，盒内启动代理使用系统内置 Windows PowerShell，并附带可选的 Hyper-V 防火墙强制脚本。项目自身代码采用 MIT 许可证；Windows 和 Windows Sandbox 是微软提供的运行平台，不包含在本项目开源代码中。
 
 **当前交付已在 Windows 11 完成功能验证**：编译与 5461 条核心参数用例通过；断网／直连／代理三种网络模式、只读输入保护、PersistData 持久化均验证通过；与白名单防火墙配合时，代理模式只需放行用户态的 `SandboxHost.exe` 即可让盒内联网（盒内流量经 CONNECT 隧道访问白名单域名），NAT 直连流量保持拦截——具体行为见下文"与宿主防火墙配合"。仍**没有声称完成防逃逸安全审计**。详细记录见 `docs/TEST-RESULTS.md`。新手从 `TUTORIAL.zh-CN.md` 开始。
 
@@ -15,6 +15,8 @@
 | `tests/DemoProbe.cpp` | 无害的盒内测试程序：检查 Windows／HKLM 写入、只读映射、持久化和真实 Token SID |
 | `tests/core_tests.cpp` | 核心边界测试；Windows 下额外使用原生参数解析 API 核对 |
 | `scripts/Test-Windows.ps1` | 在你的 Windows 上执行端到端功能验证 |
+| `scripts/sandbox-firewall-enable.bat` | 可选：Hyper-V 防火墙强制策略，堵死盒内直连出站 |
+| `scripts/sandbox-firewall-disable.bat` | 回滚上述强制策略 |
 | `build.cmd` | MSVC 一键编译并运行核心测试 |
 | `CMakeLists.txt` | 可选 CMake 构建入口，无外部包下载 |
 
@@ -162,7 +164,15 @@ Get-NetIPAddress -AddressFamily IPv4 | Where-Object InterfaceAlias -like '*vEthe
 
 **与白名单防火墙配合时，代理模式可以做到只放行一个用户态程序**：盒直连外网的流量经 NAT 转发，在宿主 WFP 层归属 `System`（PID 4），保持拦截即可；而盒到代理的连接终止在宿主 `SandboxHost.exe`，代理的出网连接也由它发起——两条都归这个用户态进程，防火墙弹窗放行 `SandboxHost.exe` 后盒即可联网。此时盒内 DNS 和不走代理的程序天然断网（DNS 走 NAT 被拦），代理白名单成为事实上的强制出口。此场景下 ICS DHCP 也会被拦，由上文所述的盒内静态地址兜底自动解决，无需放行 SharedAccess。
 
-**代理模式不是强制流量网关。盒内管理员／SYSTEM 可以关闭代理或使用不遵循代理设置的网络 API 直连。** 标准 `.wsb` 配置没有提供本项目所需的、可由普通用户控制器可靠设置的逐盒强制代理策略。本版没有实现经过验证的宿主 Hyper-V／WFP 强制出站策略。需要抗恶意程序绕过的联网控制时，必须增加宿主侧隔离网络／策略管理员组件并重新验证；不能把本代理的白名单结果当作全部盒内流量审计。
+**代理模式默认不是强制流量网关。盒内管理员／SYSTEM 可以关闭代理或使用不遵循代理设置的网络 API 直连。** 标准 `.wsb` 配置没有提供本项目所需的、可由普通用户控制器可靠设置的逐盒强制代理策略。
+
+**需要强制时，使用附带的 Hyper-V 防火墙脚本**（管理员运行，自动 UAC 提权）：
+
+```bat
+scripts\sandbox-firewall-enable.bat [proxy_ip] [proxy_port]
+```
+
+该脚本利用 Windows Sandbox 固定的 VM Creator ID，在 Hyper-V 防火墙（虚拟交换机层）将盒的默认出站改为 Block，仅放行一条 TCP 规则指向宿主代理地址。启用后盒内所有直连流量（含 DNS）被丢弃，代理成为唯一网络出口；`scripts\sandbox-firewall-disable.bat` 回滚。注意：策略对全机所有 Windows Sandbox 实例生效；正在运行的沙盒需关窗重开才能生效；换网络环境后需按当前虚拟网卡地址重跑脚本。该功能依赖 Windows 11 的 Hyper-V 防火墙支持。
 
 ## 日志、状态和生命周期
 
@@ -178,12 +188,12 @@ Get-NetIPAddress -AddressFamily IPv4 | Where-Object InterfaceAlias -like '*vEthe
 
 宿主保留 `Runtime` 下的输入快照、控制文件及 `.wsb` 供排查，本版不自动清理，也没有“无痕清理”承诺。关闭 Sandbox 后，你可手动删除确定不再使用的会话目录。
 
-## 和原方案文档的差异
+## 范围与限制
 
 - 使用公开的 `.wsb` 路径，没有直接依赖 HCS／HNS 内部 JSON 或开源容器框架。
 - 默认来宾是管理员账户；SYSTEM 需要盒内单独启动，不是 `.wsb` 的默认账户。
 - 支持 EXE／MSI，不承诺所有安装器、驱动、反虚拟机检测或硬件依赖软件都兼容。
-- 没有实现宿主端强制代理、TUN、SOCKS5、无缝 RemoteApp、后台无窗口沙盒或 Windows Home 支持。
+- 代理本身是建议性的（advisory）；需要强制时使用 `scripts/sandbox-firewall-enable.bat` 在 Hyper-V 防火墙层堵死直连（见上文"联网与显式代理"一节）。未实现 TUN、SOCKS5、无缝 RemoteApp、后台无窗口沙盒或 Windows Home 支持。
 - 文件隔离依靠微软虚拟机和映射机制；项目不声称自制了 Windows 内核，也不承诺零逃逸漏洞。
 
 ## 可选构建与测试
@@ -200,4 +210,4 @@ Windows 实测遇到问题时，保留编译输出、`doctor` 结果、生成的
 
 ## 依据
 
-原生功能与限制参照微软的 [Windows Sandbox 概述](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/)、[安装指南](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-install)、[配置指南](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-configure-using-wsb-file)。SYSTEM 任务使用 [Task Scheduler 安全上下文](https://learn.microsoft.com/en-us/windows/win32/taskschd/security-contexts-for-running-tasks)。更复杂的网络控制可进一步评估 [Hyper-V 防火墙](https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/hyper-v-firewall)，它不是本版已经验证的功能。
+原生功能与限制参照微软的 [Windows Sandbox 概述](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/)、[安装指南](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-install)、[配置指南](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-configure-using-wsb-file)。SYSTEM 任务使用 [Task Scheduler 安全上下文](https://learn.microsoft.com/en-us/windows/win32/taskschd/security-contexts-for-running-tasks)。强制出站策略使用 [Hyper-V 防火墙](https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/hyper-v-firewall)（`scripts/sandbox-firewall-enable.bat` 的实现基础）。

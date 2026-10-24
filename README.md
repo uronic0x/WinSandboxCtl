@@ -27,7 +27,10 @@ domain-whitelisted CONNECT proxy.
 ## Honest security scope
 
 - The proxy is advisory and can be bypassed by guest code. Default networking
-  is disabled.
+  is disabled. For hard enforcement, run `scripts/sandbox-firewall-enable.bat`
+  (admin, auto-UAC): it blocks all guest direct outbound at the Hyper-V
+  firewall layer, leaving the proxy as the only network exit. Roll back with
+  `scripts/sandbox-firewall-disable.bat`.
 - SYSTEM mode does not support ordinary interactive GUI windows.
 - **No escape-resistance security audit has been performed or claimed.**
   Passing functional tests is not a security audit. Full records: see

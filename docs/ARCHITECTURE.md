@@ -32,6 +32,12 @@ setting gets no network, because NAT is disabled in proxy mode. If guest
 DHCP fails, `guest/guest.ps1` assigns a static address so the proxy path
 still works without NAT.
 
+For hard enforcement, `scripts/sandbox-firewall-enable.bat` sets the Hyper-V
+firewall policy for the Windows Sandbox VM Creator to `DefaultOutboundAction
+= Block` with a single allow rule to the proxy endpoint. Direct guest
+outbound (including DNS) is then dropped at the virtual switch layer; the
+proxy becomes the only network exit.
+
 ## Runtime layout
 
 ```
